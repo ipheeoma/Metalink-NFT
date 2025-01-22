@@ -21,6 +21,9 @@
 (define-constant ERR-INVALID-EXTERNAL-ID (err u11))
 (define-constant ERR-BLACKLISTED (err u12))
 (define-constant ERR-INVALID-REFERRER (err u13))
+(define-constant ERR-CANNOT-BLACKLIST-OWNER (err u14))
+(define-constant ERR-NOT-BLACKLISTED (err u15))
+(define-constant ERR-INVALID-ADDRESS (err u16))
 
 ;; NFT Definition
 (define-non-fungible-token nft-marketplace uint)
@@ -138,6 +141,11 @@
 ;; Helper function to check if an address is blacklisted
 (define-private (is-blacklisted (address principal))
   (default-to false (get blacklisted (map-get? blacklist { address: address })))
+)
+
+;; Helper function to validate address
+(define-private (is-valid-address (address principal))
+  (not (is-eq address CONTRACT-OWNER))
 )
 
 ;; Mint a new NFT with royalty settings and metadata
@@ -367,6 +375,7 @@
 (define-public (add-to-blacklist (address principal))
   (begin
     (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (asserts! (not (is-eq address CONTRACT-OWNER)) ERR-CANNOT-BLACKLIST-OWNER)
     (ok (map-set blacklist { address: address } { blacklisted: true }))
   )
 )
@@ -375,7 +384,14 @@
 (define-public (remove-from-blacklist (address principal))
   (begin
     (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
-    (ok (map-delete blacklist { address: address }))
+    (asserts! (is-valid-address address) ERR-INVALID-ADDRESS)
+    (match (map-get? blacklist { address: address })
+      entry (begin
+        (asserts! (get blacklisted entry) ERR-NOT-BLACKLISTED)
+        (ok (map-delete blacklist { address: address }))
+      )
+      ERR-NOT-BLACKLISTED
+    )
   )
 )
 
